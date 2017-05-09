@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+ERLANG_MK_VERSION = `cat debian/erlang-mk.version`
+erlang-mk.version:
+	git describe --tags `git merge-base HEAD master` > $@
+.PHONY: version
+version: erlang-mk.version
+
+override_dh_auto_build:
+	make docs
+
+override_dh_auto_test:
+
+# FIXME: tests overwrite erlang.mk, save it beforehand
+override_dh_auto_clean:
+	make -C test clean
+	rm -rf doc/guide.pdf doc/html
+
+override_dh_auto_install: install-data install-script install-docs
+
+install-data:
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/erlang.mk/$(ERLANG_MK_VERSION)
+	install -m 644 build.config $(CURDIR)/debian/tmp/usr/share/erlang.mk/$(ERLANG_MK_VERSION)/build.config
+	install -m 644 Makefile $(CURDIR)/debian/tmp/usr/share/erlang.mk/$(ERLANG_MK_VERSION)/Makefile
+	cp -R core $(CURDIR)/debian/tmp/usr/share/erlang.mk/$(ERLANG_MK_VERSION)/core
+	cp -R index $(CURDIR)/debian/tmp/usr/share/erlang.mk/$(ERLANG_MK_VERSION)/index
+	cp -R plugins $(CURDIR)/debian/tmp/usr/share/erlang.mk/$(ERLANG_MK_VERSION)/plugins
+
+install-script:
+	mkdir -p $(CURDIR)/debian/tmp/usr/bin
+	sed "s/@@ERLANG_MK_VERSION@@/$(ERLANG_MK_VERSION)/" debian/build-erlang.mk > $(CURDIR)/debian/tmp/usr/bin/build-erlang.mk
+	chmod 755 $(CURDIR)/debian/tmp/usr/bin/build-erlang.mk
+
+install-docs:
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/erlang.mk
+	install -D -m 644 doc/guide.pdf $(CURDIR)/debian/tmp/usr/share/doc/erlang.mk/guide.pdf
+	cp -R doc/html $(CURDIR)/debian/tmp/usr/share/doc/erlang.mk/html

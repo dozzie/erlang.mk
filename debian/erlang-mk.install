@@ -1,0 +1,6 @@
+/usr/bin/build-erlang.mk
+/usr/share/erlang.mk/*/build.config
+/usr/share/erlang.mk/*/Makefile
+/usr/share/erlang.mk/*/core
+/usr/share/erlang.mk/*/index
+/usr/share/erlang.mk/*/plugins

@@ -1,0 +1,21 @@
+Source: erlang-mk
+Maintainer: Stanislaw Klekot <dozzie@jarowit.net>
+Section: erlang
+Priority: optional
+Build-Depends: debhelper (>> 7.0.0), make, asciidoc, dblatex
+
+Package: erlang-mk
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, make (>= 3.81)
+Description: makefile-based build system for Erlang
+ erlang.mk is a build system for Erlang that uses makefiles for the rules,
+ thus doesn't require much of additional software or plugins.
+
+Package: erlang-mk-doc
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: makefile-based build system for Erlang - documentation
+ erlang.mk is a build system for Erlang that uses makefiles for the rules,
+ thus doesn't require much of additional software or plugins.
+ .
+ This package contains HTML and PDF documentation for erlang.mk.
