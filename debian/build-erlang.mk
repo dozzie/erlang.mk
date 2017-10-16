@@ -100,16 +100,30 @@ fi
 case $OUTPUT in
   "") OUTPUT=`pwd`/erlang.mk ;;
   -) OUTPUT=/dev/stdout; MAKE_OPTIONS="-s $MAKE_OPTIONS" ;;
+  /*) : nothing ;;
+  *) OUTPUT=`pwd`/$OUTPUT ;;
 esac
 
-if [ -z "$BUILD_CONFIG_FILE" -a -f build.config ]; then
-  BUILD_CONFIG_FILE=`pwd`/build.config
-elif [ -z "$BUILD_CONFIG_FILE" ]; then
-  BUILD_CONFIG_FILE=$ERLANG_MK_DIR/build.config
-fi
+case $BUILD_CONFIG_FILE in
+  "")
+    # config not specified, try ./build.config and default to erlang.mk's
+    if [ -f build.config ]; then
+      BUILD_CONFIG_FILE=`pwd`/build.config
+    else
+      BUILD_CONFIG_FILE=$ERLANG_MK_DIR/build.config
+    fi
+  ;;
+  /*)
+    : nothing
+  ;;
+  *)
+    # relative path; make it absolute for `make -C'
+    BUILD_CONFIG_FILE=`pwd`/$BUILD_CONFIG_FILE
+  ;;
+esac
 
 # don't let any of the above variables leak down to the erlang.mk bootstrap
-# script, but allow to use different `make'
+# script, but allow to use `make' different than /usr/bin/make
 env -i PATH="$PATH" \
   make -C "$ERLANG_MK_DIR" $MAKE_OPTIONS \
           ERLANG_MK_VERSION="${VERSION:-$DEFAULT_VERSION}" \
