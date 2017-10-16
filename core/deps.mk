@@ -21,6 +21,26 @@ export DEPS_DIR
 REBAR_DEPS_DIR = $(DEPS_DIR)
 export REBAR_DEPS_DIR
 
+# External "early" plugins (see core/plugins.mk for regular plugins).
+# They both use the core_dep_plugin macro.
+
+define core_dep_plugin
+ifeq ($(2),$(PROJECT))
+-include $$(patsubst $(PROJECT)/%,%,$(1))
+else
+-include $(DEPS_DIR)/$(1)
+
+$(DEPS_DIR)/$(1): $(DEPS_DIR)/$(2) ;
+endif
+endef
+
+DEP_EARLY_PLUGINS ?=
+
+$(foreach p,$(DEP_EARLY_PLUGINS),\
+	$(eval $(if $(findstring /,$p),\
+		$(call core_dep_plugin,$p,$(firstword $(subst /, ,$p))),\
+		$(call core_dep_plugin,$p/early-plugins.mk,$p))))
+
 dep_name = $(if $(dep_$(1)),$(1),$(if $(pkg_$(1)_name),$(pkg_$(1)_name),$(1)))
 dep_repo = $(patsubst git://github.com/%,https://github.com/%, \
 	$(if $(dep_$(1)),$(word 2,$(dep_$(1))),$(pkg_$(1)_repo)))
@@ -58,19 +78,19 @@ endif
 # as proper OTP applications when using -include_lib. This is a temporary
 # fix, a proper fix would be to compile apps/* in the right order.
 ifndef IS_APP
-	$(verbose) for dep in $(ALL_APPS_DIRS) ; do \
-		mkdir -p $$dep/ebin || exit $$?; \
+	$(verbose) set -e; for dep in $(ALL_APPS_DIRS) ; do \
+		mkdir -p $$dep/ebin; \
 	done
 endif
 # at the toplevel: if LOCAL_DEPS is defined with at least one local app, only
 # compile that list of apps. otherwise, compile everything.
 # within an app: compile all LOCAL_DEPS that are (uncompiled) local apps
-	$(verbose) for dep in $(if $(LOCAL_DEPS_DIRS)$(IS_APP),$(LOCAL_DEPS_DIRS),$(ALL_APPS_DIRS)) ; do \
+	$(verbose) set -e; for dep in $(if $(LOCAL_DEPS_DIRS)$(IS_APP),$(LOCAL_DEPS_DIRS),$(ALL_APPS_DIRS)) ; do \
 		if grep -qs ^$$dep$$ $(ERLANG_MK_TMP)/apps.log; then \
 			:; \
 		else \
 			echo $$dep >> $(ERLANG_MK_TMP)/apps.log; \
-			$(MAKE) -C $$dep IS_APP=1 || exit $$?; \
+			$(MAKE) -C $$dep IS_APP=1; \
 		fi \
 	done
 
@@ -84,15 +104,15 @@ deps::
 else
 deps:: $(ALL_DEPS_DIRS) apps clean-tmp-deps.log
 	$(verbose) mkdir -p $(ERLANG_MK_TMP)
-	$(verbose) for dep in $(ALL_DEPS_DIRS) ; do \
+	$(verbose) set -e; for dep in $(ALL_DEPS_DIRS) ; do \
 		if grep -qs ^$$dep$$ $(ERLANG_MK_TMP)/deps.log; then \
 			:; \
 		else \
 			echo $$dep >> $(ERLANG_MK_TMP)/deps.log; \
 			if [ -f $$dep/GNUmakefile ] || [ -f $$dep/makefile ] || [ -f $$dep/Makefile ]; then \
-				$(MAKE) -C $$dep IS_DEP=1 || exit $$?; \
+				$(MAKE) -C $$dep IS_DEP=1; \
 			else \
-				echo "Error: No Makefile to build dependency $$dep."; \
+				echo "Error: No Makefile to build dependency $$dep." >&2; \
 				exit 2; \
 			fi \
 		fi \
@@ -129,6 +149,7 @@ define dep_autopatch
 endef
 
 define dep_autopatch2
+	! test -f $(DEPS_DIR)/$1/ebin/$1.app || \
 	mv -n $(DEPS_DIR)/$1/ebin/$1.app $(DEPS_DIR)/$1/src/$1.app.src; \
 	rm -f $(DEPS_DIR)/$1/ebin/$1.app; \
 	if [ -f $(DEPS_DIR)/$1/src/$1.app.src.script ]; then \
@@ -147,11 +168,15 @@ define dep_autopatch_noop
 	printf "noop:\n" > $(DEPS_DIR)/$(1)/Makefile
 endef
 
-# Overwrite erlang.mk with the current file by default.
+# Replace "include erlang.mk" with a line that will load the parent Erlang.mk
+# if given. Do it for all 3 possible Makefile file names.
 ifeq ($(NO_AUTOPATCH_ERLANG_MK),)
 define dep_autopatch_erlang_mk
-	echo "include $(call core_relpath,$(dir $(ERLANG_MK_FILENAME)),$(DEPS_DIR)/app)/erlang.mk" \
-		> $(DEPS_DIR)/$1/erlang.mk
+	for f in Makefile makefile GNUmakefile; do \
+		if [ -f $(DEPS_DIR)/$1/$$f ]; then \
+			sed -i.bak s/'include *erlang.mk'/'include $$(if $$(ERLANG_MK_FILENAME),$$(ERLANG_MK_FILENAME),erlang.mk)'/ $(DEPS_DIR)/$1/$$f; \
+		fi \
+	done
 endef
 else
 define dep_autopatch_erlang_mk
@@ -224,6 +249,8 @@ define dep_autopatch_rebar.erl
 				lists:foreach(fun
 					({d, D}) ->
 						Write("ERLC_OPTS += -D" ++ atom_to_list(D) ++ "=1\n");
+					({d, DKey, DVal}) ->
+						Write("ERLC_OPTS += -D" ++ atom_to_list(DKey) ++ "=" ++ atom_to_list(DVal) ++ "\n");
 					({i, I}) ->
 						Write(["ERLC_OPTS += -I ", I, "\n"]);
 					({platform_define, Regex, D}) ->
@@ -394,7 +421,7 @@ define dep_autopatch_rebar.erl
 			end,
 			[PortSpec(S) || S <- PortSpecs]
 	end,
-	Write("\ninclude $(call core_relpath,$(dir $(ERLANG_MK_FILENAME)),$(DEPS_DIR)/app)/erlang.mk"),
+	Write("\ninclude $$\(if $$\(ERLANG_MK_FILENAME),$$\(ERLANG_MK_FILENAME),erlang.mk)"),
 	RunPlugin = fun(Plugin, Step) ->
 		case erlang:function_exported(Plugin, Step, 2) of
 			false -> ok;
@@ -446,7 +473,7 @@ define dep_autopatch_appsrc_script.erl
 	AppSrc = "$(call core_native_path,$(DEPS_DIR)/$1/src/$1.app.src)",
 	AppSrcScript = AppSrc ++ ".script",
 	Bindings = erl_eval:new_bindings(),
-	{ok, Conf} = file:script(AppSrcScript, Bindings),
+	{ok, [Conf]} = file:script(AppSrcScript, Bindings),
 	ok = file:write_file(AppSrc, io_lib:format("~p.~n", [Conf])),
 	halt()
 endef
@@ -489,6 +516,10 @@ define dep_fetch_cp
 	cp -R $(call dep_repo,$(1)) $(DEPS_DIR)/$(call dep_name,$(1));
 endef
 
+define dep_fetch_ln
+	ln -s $(call dep_repo,$(1)) $(DEPS_DIR)/$(call dep_name,$(1));
+endef
+
 # Hex only has a package version. No need to look in the Erlang.mk packages.
 define dep_fetch_hex
 	mkdir -p $(ERLANG_MK_TMP)/hex $(DEPS_DIR)/$1; \
@@ -524,7 +555,7 @@ $(DEPS_DIR)/$(call dep_name,$1):
 	$(eval DEP_NAME := $(call dep_name,$1))
 	$(eval DEP_STR := $(if $(filter-out $1,$(DEP_NAME)),$1,"$1 ($(DEP_NAME))"))
 	$(verbose) if test -d $(APPS_DIR)/$(DEP_NAME); then \
-		echo "Error: Dependency" $(DEP_STR) "conflicts with application found in $(APPS_DIR)/$(DEP_NAME)."; \
+		echo "Error: Dependency" $(DEP_STR) "conflicts with application found in $(APPS_DIR)/$(DEP_NAME)." >&2; \
 		exit 17; \
 	fi
 	$(verbose) mkdir -p $(DEPS_DIR)
@@ -566,15 +597,15 @@ ifndef IS_APP
 clean:: clean-apps
 
 clean-apps:
-	$(verbose) for dep in $(ALL_APPS_DIRS) ; do \
-		$(MAKE) -C $$dep clean IS_APP=1 || exit $$?; \
+	$(verbose) set -e; for dep in $(ALL_APPS_DIRS) ; do \
+		$(MAKE) -C $$dep clean IS_APP=1; \
 	done
 
 distclean:: distclean-apps
 
 distclean-apps:
-	$(verbose) for dep in $(ALL_APPS_DIRS) ; do \
-		$(MAKE) -C $$dep distclean IS_APP=1 || exit $$?; \
+	$(verbose) set -e; for dep in $(ALL_APPS_DIRS) ; do \
+		$(MAKE) -C $$dep distclean IS_APP=1; \
 	done
 endif
 

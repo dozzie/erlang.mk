@@ -167,6 +167,7 @@ The following table lists all existing methods:
 | hg             | hg repo commit  | Clone the Mercurial repository and update to the given version
 | svn            | svn repo        | Checkout the given SVN repository
 | cp             | cp path/to/repo | Recursively copy a local directory
+| ln             | ln path/to/repo | Symbolically link a local directory
 | hex            | hex version     | Download the given project version from hex.pm
 | fail           | N/A             | Always fail, reserved for internal use
 | legacy         | N/A             | Legacy Erlang.mk fetcher, reserved for internal use
@@ -487,10 +488,11 @@ on the kind of project it finds the dependency to be.
 as their build tool. This essentially patches Rebar out, and
 fixes and converts the project to be compatible with Erlang.mk.
 
-* Erlang.mk projects have their 'erlang.mk' file redirect to
-the top-level project's Erlang.mk. This is to ensure that
-functionality works across all dependencies, even if the
-dependency's Erlang.mk is outdated.
+* Erlang.mk projects have their 'Makefile' patched, if necessary,
+to include the top-level project's Erlang.mk. This is to ensure
+that functionality works across all dependencies, even if the
+dependency's Erlang.mk is outdated. The patched Makefile
+can be safely committed if necessary.
 
 * Other Erlang projects get a small Erlang.mk Makefile
 generated automatically.

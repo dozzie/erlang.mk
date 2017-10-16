@@ -43,7 +43,7 @@ MacPorts:
 
 .Homebrew
 [source,bash]
-$ brew install erlang git homebrew/dupes/make
+$ brew install erlang git make
 
 Homebrew installs GNU Make as `gmake`. The `make` command
 is the one provided by Apple.
@@ -57,6 +57,10 @@ $ sudo port install erlang git gmake
 Erlang.mk can be used on Windows inside an MSYS2 environment.
 Cygwin, MSYS (the original) and native Windows (both Batch
 and PowerShell) are currently not supported.
+
+NOTE: Erlang.mk expects Unix line breaks in most of the files
+(LF instead of CRLF). Make sure to configure your text editor
+adequately.
 
 The rest of this section details how to setup Erlang/OTP and
 MSYS2 in order to use Erlang.mk.

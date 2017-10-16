@@ -8,9 +8,10 @@
 RELX ?= $(ERLANG_MK_TMP)/relx
 RELX_CONFIG ?= $(CURDIR)/relx.config
 
-RELX_URL ?= https://github.com/erlware/relx/releases/download/v3.19.0/relx
+RELX_URL ?= https://github.com/erlware/relx/releases/download/v3.23.0/relx
 RELX_OPTS ?=
 RELX_OUTPUT_DIR ?= _rel
+RELX_REL_EXT ?=
 RELX_TAR ?= 1
 
 ifdef SFX
@@ -53,7 +54,7 @@ distclean-relx-rel:
 # Run target.
 
 ifeq ($(wildcard $(RELX_CONFIG)),)
-run:
+run::
 else
 
 define get_relx_release.erl
@@ -73,8 +74,12 @@ RELX_REL := $(shell $(call erlang,$(get_relx_release.erl)))
 RELX_REL_NAME := $(word 1,$(RELX_REL))
 RELX_REL_VSN := $(word 2,$(RELX_REL))
 
-run: all
-	$(verbose) $(RELX_OUTPUT_DIR)/$(RELX_REL_NAME)/bin/$(RELX_REL_NAME) console
+ifeq ($(PLATFORM),msys2)
+RELX_REL_EXT := .cmd
+endif
+
+run:: all
+	$(verbose) $(RELX_OUTPUT_DIR)/$(RELX_REL_NAME)/bin/$(RELX_REL_NAME)$(RELX_REL_EXT) console
 
 help::
 	$(verbose) printf "%s\n" "" \

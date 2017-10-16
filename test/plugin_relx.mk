@@ -8,6 +8,12 @@ RELX_TARGETS = $(addprefix relx-,$(RELX_CASES))
 
 .PHONY: relx $(RELX_TARGETS)
 
+ifeq ($(PLATFORM),msys2)
+RELX_REL_EXT = .cmd
+else
+RELX_REL_EXT =
+endif
+
 relx: $(RELX_TARGETS)
 
 relx-rel: build clean
@@ -104,37 +110,37 @@ endif
 
 	$i "Start initial release and confirm it runs the old code"
 ifeq ($(PLATFORM),msys2)
-	$t $(APP)/tmp/bin/$(APP)_release.cmd install $v
-	$t $(APP)/tmp/bin/$(APP)_release.cmd start $v
-	$t sleep 1
-	$t test `$(APP)/tmp/bin/$(APP)_release.cmd rpcterms test test` = old
-else
-	$t $(APP)/tmp/bin/$(APP)_release start $v
-	$t sleep 1
-	$t test `$(APP)/tmp/bin/$(APP)_release rpcterms test test` = old
+	$t $(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) install $v
 endif
+	$t $(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) start $v
+	$t sleep 1
+	$t test `$(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) rpcterms test test` = old
 
-	$i "Move the relup tarball to the release directory"
+	$i "Check that it's 1 available version"
+	$t test `$(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) versions | wc -l` = "2"
+
+	$i "Copy the relup tarball to the release directory"
 	$t mkdir $(APP)/tmp/releases/2
-	$t mv $(APP)/_rel/$(APP)_release/$(APP)_release-2.tar.gz $(APP)/tmp/releases/2/$(APP)_release.tar.gz
+	$t cp $(APP)/_rel/$(APP)_release/$(APP)_release-2.tar.gz $(APP)/tmp/releases/2/$(APP)_release.tar.gz
+	$t test -f $(APP)/tmp/releases/2/$(APP)_release.tar.gz
 
 	$i "Upgrade the release and confirm it runs the new code"
+	$t $(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) upgrade "2"
+	$t sleep 1
+	$t test `$(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) rpcterms test test` = new
+
+	$i "Check that it's 2 available versions"
+	$t test `$(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) versions | wc -l` = "3"
+
+	$i "Downgrade the release and confirm it runs the old code"
+	$t $(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) downgrade "1"
+	$t sleep 1
+	$t test `$(APP)/tmp/bin/$(APP)_release$(RELX_REL_EXT) rpcterms test test` = old
+
+	$i "Stop the release"
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release$(RELX_REL_EXT) stop $v
 ifeq ($(PLATFORM),msys2)
-	$t $(APP)/tmp/bin/$(APP)_release.cmd upgrade "2/$(APP)_release" $v
-	$t sleep 1
-	$t test `$(APP)/tmp/bin/$(APP)_release.cmd rpcterms test test` = new
-
-	$i "Stop the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd stop $v
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd uninstall $v
-else
-	$i "Upgrade running release"
-	$t $(APP)/tmp/bin/$(APP)_release upgrade "2/$(APP)_release" $v
-	$t sleep 1
-	$t test `$(APP)/tmp/bin/$(APP)_release rpcterms test test` = new
-
-	$i "Stop the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release stop $v
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release$(RELX_REL_EXT) uninstall $v
 endif
 
 relx-start-stop: build clean
@@ -147,35 +153,24 @@ relx-start-stop: build clean
 	$i "Build the release"
 	$t $(MAKE) -C $(APP) $v
 
-ifeq ($(PLATFORM),msys2)
-	$i "Install and start the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd install $v
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd start $v
-	$t sleep 1
-
-	$i "Ping the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd ping $v
-
-	$i "Stop and uninstall the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd stop $v
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd uninstall $v
-
-	$i "Check that further pings get no replies"
-	$t ! $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd ping $v
-else
 	$i "Start the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release start $v
+ifeq ($(PLATFORM),msys2)
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd install $v
+endif
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release$(RELX_REL_EXT) start $v
 	$t sleep 1
 
 	$i "Ping the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release ping $v
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release$(RELX_REL_EXT) ping $v
 
 	$i "Stop the release"
-	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release stop $v
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release$(RELX_REL_EXT) stop $v
+ifeq ($(PLATFORM),msys2)
+	$t $(APP)/_rel/$(APP)_release/bin/$(APP)_release.cmd uninstall $v
+endif
 
 	$i "Check that further pings get no replies"
-	$t ! $(APP)/_rel/$(APP)_release/bin/$(APP)_release ping $v
-endif
+	$t ! $(APP)/_rel/$(APP)_release/bin/$(APP)_release$(RELX_REL_EXT) ping $v
 
 relx-tar: build clean
 
